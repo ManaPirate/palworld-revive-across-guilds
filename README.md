@@ -5,15 +5,23 @@ Palworld dedicated servers. It lets players revive a downed ally even when
 they are **not** in the same guild — normally Palworld only allows a
 guildmate to do this.
 
+It also fixes a related issue: Palworld normally skips the downed/revive
+countdown and kills a player outright if it decides no guildmate is
+available to revive them (e.g. they're alone in their guild). This mod
+tries to force the downed state to always happen instead, since with
+cross-guild revives enabled, a stranger nearby may still be able to save
+them.
+
 ## Status
 
-This is a first, best-effort implementation. Palworld's guild-membership
-check for reviving isn't a plain property and there's no
-`PalWorldSettings.ini` setting for it, so the mod hooks a short list of
-plausible candidate functions rather than one confirmed one. See
-[`docs/TUNING.md`](docs/TUNING.md) for how to verify it's working on your
-server and how to adjust it if the default candidates don't match your game
-version.
+This is a first, best-effort implementation. Neither of Palworld's
+underlying checks here (guild membership for reviving, and whether a
+reviver is available before killing a downed player outright) are plain
+properties, and there's no `PalWorldSettings.ini` setting for either, so
+the mod hooks short lists of plausible candidate functions rather than
+confirmed ones. See [`docs/TUNING.md`](docs/TUNING.md) for how to verify
+it's working on your server and how to adjust it if the default candidates
+don't match your game version.
 
 ## Requirements
 

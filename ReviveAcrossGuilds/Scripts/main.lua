@@ -5,25 +5,34 @@
 -- tries to lift that restriction so any player nearby can revive any other
 -- downed player, regardless of guild membership.
 --
--- HOW THIS WORKS
--- Palworld's guild-membership check for reviving isn't a simple property on
--- the player, and there is no PalWorldSettings.ini toggle for it. The exact
--- UFunction that gates the revive interaction could not be confirmed against
--- a live server/UE4SS Live View at the time this mod was written, so it takes
--- a best-effort approach:
+-- It also addresses a related problem this restriction creates: Palworld
+-- skips the downed/revive-countdown state entirely and kills a player
+-- outright when it decides no guildmate is available to revive them (e.g.
+-- they're alone in their guild, or their only guildmate is offline). With
+-- strangers now able to revive anyone, that shortcut is no longer correct --
+-- someone nearby might well be able to revive them if only they were given
+-- the countdown. See the DOWNED_STATE_HOOKS section below.
 --
---   1. It registers hooks on a short list of plausible "can revive" function
---      names (see CANDIDATE_HOOKS below) and forces a false/blocked result to
---      true when one of them fires. Every candidate name mentions "Revive"
+-- HOW THIS WORKS
+-- None of the UFunctions involved here are confirmed against a live
+-- server/UE4SS Live View -- Palworld's guild-membership and
+-- alone-in-guild checks aren't plain properties, and there's no
+-- PalWorldSettings.ini toggle for either behavior. So this takes a
+-- best-effort approach:
+--
+--   1. It registers hooks on short lists of plausible candidate function
+--      names (see CANDIDATE_HOOKS and DOWNED_STATE_HOOKS below) and forces
+--      their boolean result to the value that produces the wanted
+--      behavior. Every candidate name is scoped to revive/downed-state
 --      specifically -- none of them touch a shared/generic guild-membership
 --      utility, so a wrong guess is a silent no-op, never a side effect on
 --      unrelated systems (base building, storage, PvP, etc.).
 --   2. It also hooks the confirmed ReviveCharacter_ToServer RPC purely for
 --      logging, so UE4SS.log shows whether a revive actually completed.
 --
--- If revives between non-guildmates still don't work after installing this,
--- see ../../docs/TUNING.md for how to find the correct function name with
--- UE4SS's Live View and add it to CANDIDATE_HOOKS.
+-- If cross-guild revives or solo-guild downed state still don't work after
+-- installing this, see ../../docs/TUNING.md for how to find the correct
+-- function names with UE4SS's Live View and add them below.
 
 local MOD_TAG = "[ReviveAcrossGuilds]"
 
@@ -31,11 +40,8 @@ local function log(message)
     print(string.format("%s %s\n", MOD_TAG, message))
 end
 
--- Candidate UFunctions that might gate "can PlayerA revive PlayerB". All of
--- these are scoped to revive specifically -- add more candidates here as you
--- discover them, but avoid anything that looks like a generic/shared guild
--- check (e.g. "IsSameGuildMember") since forcing that to true would also
--- affect unrelated guild-gated systems like base ownership and storage.
+-- Candidate UFunctions that might gate "can PlayerA revive PlayerB". Forced
+-- to true whenever they fire with a false/blocked result.
 local CANDIDATE_HOOKS = {
     "/Script/Pal.PalPlayerCharacter:CanRevive",
     "/Script/Pal.PalPlayerCharacter:CanReviveOtherPlayer",
@@ -45,18 +51,40 @@ local CANDIDATE_HOOKS = {
     "/Script/Pal.PalPlayerCharacter:CheckCanRevive",
 }
 
+-- Candidate UFunctions that might gate "should this player enter the downed
+-- (reviveable) state at all, or die outright". Each entry lists the target
+-- value the mod forces it to whenever it fires with the opposite result --
+-- "positive" names (can/should/has) are forced true, "negative" names
+-- (alone/no reviver) are forced false, so that in every case the outcome is
+-- "always allow the downed state instead of instant death".
+local DOWNED_STATE_HOOKS = {
+    { path = "/Script/Pal.PalPlayerCharacter:CanEnterDownedState", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:ShouldEnterDownedState", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:CanDown", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:CanBeDowned", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:HasReviveTarget", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:HasAvailableReviver", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:IsPossibleToRevive", target = true },
+    { path = "/Script/Pal.PalPlayerCharacter:IsAloneInGuild", target = false },
+    { path = "/Script/Pal.PalPlayerCharacter:IsGuildMemberOffline", target = false },
+    { path = "/Script/Pal.PalPlayerCharacter:ShouldSkipDownedState", target = false },
+    { path = "/Script/Pal.PalPlayerCharacter:ShouldDieImmediately", target = false },
+}
+
 -- Confirmed to exist (used by community "instant self-revive" tools): the
 -- RPC that actually applies a revive to a character. Hooked only for
 -- diagnostics -- by the time this fires, whatever decided the interaction
 -- was allowed has already run.
 local DIAGNOSTIC_HOOK = "/Script/Pal.PalPlayerCharacter:ReviveCharacter_ToServer"
 
--- Forces a hooked function's return value to true whenever it fired with a
--- false/blocked result. UE4SS appends a UFunction's return value as the last
--- hook parameter, so this reads whichever argument ends up last rather than
--- assuming a fixed parameter count, since the real signature of each
--- candidate is unverified.
-local function force_true_on_return(function_path)
+-- Forces a hooked function's boolean return value to target_value whenever
+-- it fires with the opposite value. UE4SS appends a UFunction's return
+-- value as the last hook parameter, so this reads whichever argument ends
+-- up last rather than assuming a fixed parameter count, since the real
+-- signature of each candidate is unverified. Comparing against the exact
+-- opposite boolean (rather than just "is it falsy") means a wrong-candidate
+-- match on a non-boolean return is always a silent no-op.
+local function force_boolean_return(function_path, target_value, log_label)
     local attached, err = pcall(function()
         RegisterHook(function_path, function(...)
             local count = select("#", ...)
@@ -74,10 +102,10 @@ local function force_true_on_return(function_path)
                 return
             end
 
-            if current == false then
-                local set_ok = pcall(function() return_value:set(true) end)
+            if current == (not target_value) then
+                local set_ok = pcall(function() return_value:set(target_value) end)
                 if set_ok then
-                    log(string.format("Allowed a revive via %s", function_path))
+                    log(string.format("%s via %s", log_label, function_path))
                 end
             end
         end)
@@ -95,7 +123,11 @@ local function force_true_on_return(function_path)
 end
 
 for _, function_path in ipairs(CANDIDATE_HOOKS) do
-    force_true_on_return(function_path)
+    force_boolean_return(function_path, true, "Allowed a revive")
+end
+
+for _, hook in ipairs(DOWNED_STATE_HOOKS) do
+    force_boolean_return(hook.path, hook.target, "Forced downed state instead of instant death")
 end
 
 local diagnostic_attached, diagnostic_err = pcall(function()

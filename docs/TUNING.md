@@ -1,10 +1,26 @@
 # Tuning ReviveAcrossGuilds
 
-This mod ships with a best-effort guess at which UFunction gates "can this
-player revive that player". It was written without access to a live
-Palworld server or a UE4SS reflection dump, so the guess may be wrong for
-your game version. This doc explains how to check, and what to do if the
-default candidates don't work.
+This mod ships with best-effort guesses at which UFunctions gate two
+behaviors: "can this player revive that player", and "should this player
+enter the downed/reviveable state at all, or die outright". It was written
+without access to a live Palworld server or a UE4SS reflection dump, so the
+guesses may be wrong for your game version. This doc explains how to check,
+and what to do if the default candidates don't work.
+
+## Solo/alone-in-guild instant death
+
+Palworld skips the downed-state countdown and kills a player outright when
+it decides no guildmate is available to revive them — e.g. they're the only
+member of their guild online. That shortcut made sense when only
+guildmates could revive you, but it defeats the purpose of this mod: a
+stranger nearby might well be able to revive them if only they got the
+countdown. `DOWNED_STATE_HOOKS` in `main.lua` tries to force that decision
+to always allow the downed state. Watch for
+`Forced downed state instead of instant death via ...` in `UE4SS.log` when
+a solo-guild player drops to 0 HP; if a solo/alone player still dies
+outright with no such line, none of the shipped candidates matched — see
+"Finding the correct function name yourself" below and search for whatever
+decides that outcome instead.
 
 ## How to tell if it's working
 
@@ -50,10 +66,13 @@ functions in real time:
 3. Interact with (attempt to revive) a downed, non-guild player while
    watching the Live View / log to see which function actually gets
    called.
-4. Once you have the real name, add it to `CANDIDATE_HOOKS` at the top of
-   `ReviveAcrossGuilds/Scripts/main.lua`, in the same
-   `"/Script/Pal.PalPlayerCharacter:FunctionName"` format as the existing
-   entries.
+4. Once you have the real name, add it to `CANDIDATE_HOOKS` (for the revive
+   permission check) or `DOWNED_STATE_HOOKS` (for the instant-death check)
+   at the top of `ReviveAcrossGuilds/Scripts/main.lua`. For
+   `DOWNED_STATE_HOOKS`, set `target = true` if the function name reads as
+   a positive check ("can/should/has ...") or `target = false` if it reads
+   as a negative one ("alone/no reviver/should skip ..."), so the outcome
+   is always "allow the downed state".
 
 ## If nothing fires at all
 
