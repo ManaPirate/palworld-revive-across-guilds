@@ -7,6 +7,38 @@ without access to a live Palworld server or a UE4SS reflection dump, so the
 guesses may be wrong for your game version. This doc explains how to check,
 and what to do if the default candidates don't work.
 
+## PvP detection
+
+Reviving strangers is a griefing vector on a PvP server (interrupting
+combat resolution, interfering with raids, etc.), so the mod tries to read
+`bIsPvP` out of `PalWorldSettings.ini` at startup and disables its entire
+effect — both `CANDIDATE_HOOKS` and `DOWNED_STATE_HOOKS` — if PvP is on, or
+if the setting can't be confirmed either way (fail-safe default; see
+`ASSUME_PVP_IF_UNDETECTABLE` in `main.lua`).
+
+Check `UE4SS.log` at startup for one of:
+
+- `PvP is disabled (bIsPvP=False in <path>) -- cross-guild revive is
+  active.` — detection worked and the mod is on.
+- `PvP is enabled (bIsPvP=True in <path>) -- disabling cross-guild revive
+  to prevent griefing.` — working as intended on a PvP server; the mod is
+  a no-op.
+- `Could not read bIsPvP from PalWorldSettings.ini in any candidate
+  location. Defaulting to INACTIVE for safety ...` — path detection
+  failed. `INI_PATH_CANDIDATES` in `main.lua` lists the relative paths
+  tried; UE4SS's working directory for Lua scripts isn't confirmed, so add
+  the correct one for your server layout (find it by checking where
+  `PalWorldSettings.ini` actually sits relative to wherever `PalServer.sh`
+  is launched from). Diagnostic hook lines also report the current
+  `mod active=true/false` state on every revive, which is a fast way to
+  confirm the effective state without restarting.
+
+If you're confident about your server's PvP state and don't want to debug
+path detection, set `FORCE_MODE` in `main.lua` to `"always_on"` or
+`"always_off"` to skip auto-detection entirely. Setting `"always_on"` on a
+PvP server re-introduces the griefing vector this check exists to prevent
+— only do that deliberately.
+
 ## Solo/alone-in-guild instant death
 
 Palworld skips the downed-state countdown and kills a player outright when
