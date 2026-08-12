@@ -12,6 +12,13 @@ tries to force the downed state to always happen instead, since with
 cross-guild revives enabled, a stranger nearby may still be able to save
 them.
 
+**PvP servers:** letting anyone revive anyone is a griefing vector in PvP
+(reviving an enemy to disrupt a fight, interfering with a raid, etc.), so
+the mod checks `bIsPvP` in `PalWorldSettings.ini` at startup and disables
+itself entirely if PvP is on, or if the setting can't be confirmed. See
+[`docs/TUNING.md`](docs/TUNING.md#pvp-detection) for how to verify this and
+how to override it if you need to.
+
 ## Status
 
 This is a first, best-effort implementation. Neither of Palworld's
