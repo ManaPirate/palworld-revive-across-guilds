@@ -5,13 +5,6 @@ Palworld dedicated servers. It lets players revive a downed ally even when
 they are **not** in the same guild — normally Palworld only allows a
 guildmate to do this.
 
-It also fixes a related issue: Palworld normally skips the downed/revive
-countdown and kills a player outright if it decides no guildmate is
-available to revive them (e.g. they're alone in their guild). This mod
-tries to force the downed state to always happen instead, since with
-cross-guild revives enabled, a stranger nearby may still be able to save
-them.
-
 **PvP servers:** letting anyone revive anyone is a griefing vector in PvP
 (reviving an enemy to disrupt a fight, interfering with a raid, etc.), so
 the mod checks `bIsPvP` in `PalWorldSettings.ini` at startup and disables
@@ -21,14 +14,21 @@ how to override it if you need to.
 
 ## Status
 
-This is a first, best-effort implementation. Neither of Palworld's
-underlying checks here (guild membership for reviving, and whether a
-reviver is available before killing a downed player outright) are plain
-properties, and there's no `PalWorldSettings.ini` setting for either, so
-the mod hooks short lists of plausible candidate functions rather than
-confirmed ones. See [`docs/TUNING.md`](docs/TUNING.md) for how to verify
-it's working on your server and how to adjust it if the default candidates
-don't match your game version.
+A live reflection dump against a real dedicated server (21 Aug 2026)
+confirmed the mod's original guessed function names were all wrong, and
+found the real ones instead. The mod now hooks the confirmed real revive
+RPC and, if the target is genuinely down, calls the confirmed real revive
+function itself, bypassing whatever internal guild check may otherwise
+apply. This has **not yet been live-tested** with two players in different
+guilds -- see [`docs/TUNING.md`](docs/TUNING.md) for exactly what's
+confirmed vs. still unverified, and what the log lines mean.
+
+The related solo-guild instant-death fix (skipping the downed countdown
+and killing a player outright when Palworld decides no guildmate is
+available) is **not yet implemented** in this version -- the old guessed
+approach was confirmed wrong along with everything else, and a real
+replacement hasn't been confirmed yet. See
+[`docs/TUNING.md`](docs/TUNING.md#solo-alone-in-guild-instant-death-not-yet-fixed-in-v2).
 
 ## Requirements
 
